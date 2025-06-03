@@ -945,6 +945,87 @@ bool CmdMeshSectionByPlane::isActive()
 
 //--------------------------------------------------------------------------------------
 
+DEF_STD_CMD_A(CmdMeshSectionByPlane2)
+
+CmdMeshSectionByPlane2::CmdMeshSectionByPlane2()
+    : Command("Mesh_SectionByPlane2")
+{
+    sAppModule = "Mesh";
+    sGroup = QT_TR_NOOP("Mesh");
+    sMenuText = QT_TR_NOOP("Create section from mesh and plane");
+    sToolTipText = QT_TR_NOOP("Section from mesh and plane");
+    sStatusTip = QT_TR_NOOP("Section from mesh and plane");
+    sPixmap = "Mesh_SectionByPlane";
+}
+
+void CmdMeshSectionByPlane2::activated(int)
+{
+    Base::Type partType = Base::Type::fromName("Part::Plane");
+    std::vector<App::DocumentObject*> plane = getSelection().getObjectsOfType(partType);
+    if (plane.empty()) {
+        QMessageBox::warning(
+            Gui::getMainWindow(),
+            qApp->translate("MeshPart_Section", "Select plane"),
+            qApp->translate("MeshPart_Section",
+                            "Please select a plane at which you section the mesh."));
+        return;
+    }
+
+    Base::Placement plm = static_cast<App::GeoFeature*>(plane.front())->Placement.getValue();
+    Base::Vector3d normal(0, 0, 1);
+    plm.getRotation().multVec(normal, normal);
+    Base::Vector3d base = plm.getPosition();
+
+    openCommand(QT_TRANSLATE_NOOP("Command", "Section with plane"));
+    std::vector<App::DocumentObject*> docObj =
+        Gui::Selection().getObjectsOfType(Mesh::Feature::getClassTypeId());
+    Mesh::MeshObject::TPlane tplane;
+    tplane.first = Base::Vector3f(static_cast<float>(base.x), 
+                                 static_cast<float>(base.y), 
+                                 static_cast<float>(base.z));
+    tplane.second = Base::Vector3f(static_cast<float>(normal.x), 
+                                  static_cast<float>(normal.y), 
+                                  static_cast<float>(normal.z));
+    std::vector<Mesh::MeshObject::TPlane> sections;
+    sections.push_back(tplane);
+
+    for (auto it : docObj) {
+        const Mesh::MeshObject* mesh = static_cast<Mesh::Feature*>(it)->Mesh.getValuePtr();
+        std::vector<Mesh::MeshObject::TPolylines> polylines;
+        const float minSectionLength = 1e-7F;
+        mesh->crossSections(sections, polylines, minSectionLength);
+
+        // Create a new sketch
+        std::string sketchName = it->getNameInDocument();
+        sketchName += "_section_points";
+        Gui::Command::doCommand(Gui::Command::Doc, 
+            "sketch = App.ActiveDocument.addObject('Sketcher::SketchObject', '%s')", 
+            sketchName.c_str());
+
+        // Add points to the sketch
+        for (const auto& polyline : polylines) {
+            for (const auto& points : polyline) {
+                for (const auto& point : points) {
+                    Gui::Command::doCommand(Gui::Command::Doc,
+                        "sketch.addGeometry(Part.Point(App.Vector(%f, %f, %f)))",
+                        point.x, point.y, point.z);
+                }
+            }
+        }
+    }
+
+    updateActive();
+    commitCommand();
+}
+
+bool CmdMeshSectionByPlane2::isActive()
+{
+    // Check for the selected mesh feature (all Mesh types)
+    return getSelection().countObjectsOfType<Mesh::Feature>() == 1;
+}
+
+//--------------------------------------------------------------------------------------
+
 DEF_STD_CMD_A(CmdMeshCrossSections)
 
 CmdMeshCrossSections::CmdMeshCrossSections()
@@ -1846,6 +1927,7 @@ void CreateMeshCommands()
     rcCmdMgr.addCommand(new CmdMeshPolyTrim());
     rcCmdMgr.addCommand(new CmdMeshTrimByPlane());
     rcCmdMgr.addCommand(new CmdMeshSectionByPlane());
+    rcCmdMgr.addCommand(new CmdMeshSectionByPlane2());
     rcCmdMgr.addCommand(new CmdMeshCrossSections());
     rcCmdMgr.addCommand(new CmdMeshEvaluation());
     rcCmdMgr.addCommand(new CmdMeshEvaluateFacet());

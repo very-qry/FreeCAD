@@ -199,6 +199,7 @@ Gui::MenuItem* Workbench::setupMenuBar() const
              //<< "Mesh_PolySegm"
              << "Mesh_TrimByPlane"
              << "Mesh_SectionByPlane"
+             << "Mesh_SectionByPlane2"
              << "Mesh_CrossSections";
 
     mesh->setCommand("&Meshes");
@@ -272,6 +273,7 @@ Gui::ToolBarItem* Workbench::setupToolBars() const
              << "Mesh_PolyTrim"
              << "Mesh_TrimByPlane"
              << "Mesh_SectionByPlane"
+             << "Mesh_SectionByPlane2"
              << "Mesh_CrossSections";
 
     Gui::ToolBarItem* compseg = new Gui::ToolBarItem(root);

@@ -1868,6 +1868,193 @@ bool CmdSketcherCarbonCopy::isActive()
     return isCommandActive(getActiveGuiDocument());
 }
 
+// Circle Fit ================================================================
+
+DEF_STD_CMD_AU(CmdSketcherCircleFit)
+
+CmdSketcherCircleFit::CmdSketcherCircleFit()
+    : Command("Sketcher_CircleFit")
+{
+    sAppModule = "Sketcher";
+    sGroup = "Sketcher";
+    sMenuText = QT_TR_NOOP("Fit circle to points");
+    sToolTipText = QT_TR_NOOP("Fit a circle to selected points");
+    sWhatsThis = "Sketcher_CircleFit";
+    sStatusTip = sToolTipText;
+    sPixmap = "Sketcher_CircleFit";
+    sAccel = "G, F";
+    eType = ForEdit;
+}
+
+CONSTRUCTION_UPDATE_ACTION(CmdSketcherCircleFit, "Sketcher_CircleFit")
+
+void CmdSketcherCircleFit::activated(int iMsg)
+{
+    Q_UNUSED(iMsg);
+
+    // Automatically use the currently edited sketch
+    Gui::Document* editGuiDoc = Gui::Application::Instance->editDocument();
+    if (!editGuiDoc) {
+        QMessageBox::warning(Gui::getMainWindow(),
+            QObject::tr("Circle Fit"),
+            QObject::tr("No sketch is currently being edited. Please enter edit mode for a sketch."));
+        return;
+    }
+    Gui::ViewProvider* vp = editGuiDoc->getInEdit();
+    Sketcher::SketchObject* sketch = nullptr;
+    if (vp) {
+        App::DocumentObject* obj = nullptr;
+        if (auto vpd = dynamic_cast<Gui::ViewProviderDocumentObject*>(vp))
+            obj = vpd->getObject();
+        if (obj && obj->getTypeId().isDerivedFrom(Sketcher::SketchObject::getClassTypeId()))
+            sketch = static_cast<Sketcher::SketchObject*>(obj);
+    }
+    if (!sketch) {
+        QMessageBox::warning(Gui::getMainWindow(),
+            QObject::tr("Circle Fit"),
+            QObject::tr("No sketch is currently being edited. Please enter edit mode for a sketch."));
+        return;
+    }
+
+    // Use getSelectionEx to get selected vertices in the viewport
+    std::vector<Gui::SelectionObject> selection = Gui::Selection().getSelectionEx();
+    std::vector<Base::Vector2d> points;
+
+    for (const auto& sel : selection) {
+        if (sel.getObject() != sketch)
+            continue;
+        const std::vector<std::string>& subNames = sel.getSubNames();
+        for (const auto& subName : subNames) {
+            // Only process vertices
+            if (subName.size() > 6 && subName.substr(0, 6) == "Vertex") {
+                int VtId = std::atoi(&subName[6]) - 1;
+                int geoId = -1;
+                Sketcher::PointPos posId = Sketcher::PointPos::none;
+                sketch->getGeoVertexIndex(VtId, geoId, posId);
+                if (geoId >= 0) {
+                    try {
+                        Base::Vector3d point3d = sketch->getPoint(geoId, posId);
+                        points.push_back(Base::Vector2d(point3d.x, point3d.y));
+                    } catch (const Base::Exception&) {
+                        continue;
+                    }
+                }
+            }
+        }
+    }
+
+    if (points.size() < 3) {
+        QMessageBox::warning(Gui::getMainWindow(),
+            QObject::tr("Circle Fit"),
+            QObject::tr("Please select at least 3 points to fit a circle."));
+        return;
+    }
+
+    // Initial guess for circle parameters
+    double x0 = 0, y0 = 0, r = 0;
+    
+    // Calculate initial center as mean of points
+    for (const auto& p : points) {
+        x0 += p.x;
+        y0 += p.y;
+    }
+    x0 /= points.size();
+    y0 /= points.size();
+
+    // Calculate initial radius as mean distance from center to points
+    for (const auto& p : points) {
+        r += std::sqrt(std::pow(p.x - x0, 2) + std::pow(p.y - y0, 2));
+    }
+    r /= points.size();
+
+    // Levenberg-Marquardt optimization
+    const int maxIterations = 100;
+    const double lambda = 0.001;
+    const double tolerance = 1e-6;
+    
+    for (int iter = 0; iter < maxIterations; ++iter) {
+        double sumError = 0;
+        double sumErrorX0 = 0, sumErrorY0 = 0, sumErrorR = 0;
+        double sumErrorX0X0 = 0, sumErrorY0Y0 = 0, sumErrorRR = 0;
+        double sumErrorX0Y0 = 0, sumErrorX0R = 0, sumErrorY0R = 0;
+
+        for (const auto& p : points) {
+            double dx = p.x - x0;
+            double dy = p.y - y0;
+            double d = std::sqrt(dx*dx + dy*dy);
+            double error = d - r;
+            sumError += error * error;
+
+            if (d > 1e-10) {  // Avoid division by zero
+                double ddx = dx/d;
+                double ddy = dy/d;
+                
+                sumErrorX0 += error * ddx;
+                sumErrorY0 += error * ddy;
+                sumErrorR += error;
+
+                sumErrorX0X0 += ddx * ddx;
+                sumErrorY0Y0 += ddy * ddy;
+                sumErrorRR += 1;
+                sumErrorX0Y0 += ddx * ddy;
+                sumErrorX0R += ddx;
+                sumErrorY0R += ddy;
+            }
+        }
+
+        // Check convergence
+        if (sumError < tolerance) {
+            break;
+        }
+
+        // Update parameters using Levenberg-Marquardt
+        double det = (sumErrorX0X0 + lambda) * (sumErrorY0Y0 + lambda) * (sumErrorRR + lambda) -
+                    (sumErrorX0Y0 * sumErrorX0Y0 * (sumErrorRR + lambda) +
+                     sumErrorX0R * sumErrorX0R * (sumErrorY0Y0 + lambda) +
+                     sumErrorY0R * sumErrorY0R * (sumErrorX0X0 + lambda)) +
+                    2 * sumErrorX0Y0 * sumErrorX0R * sumErrorY0R;
+
+        if (std::abs(det) < 1e-10) {
+            break;
+        }
+
+        double dx0 = ((sumErrorY0Y0 + lambda) * (sumErrorRR + lambda) - sumErrorY0R * sumErrorY0R) * sumErrorX0 +
+                    (sumErrorX0R * sumErrorY0R - sumErrorX0Y0 * (sumErrorRR + lambda)) * sumErrorY0 +
+                    (sumErrorX0Y0 * sumErrorY0R - sumErrorX0R * (sumErrorY0Y0 + lambda)) * sumErrorR;
+
+        double dy0 = (sumErrorX0R * sumErrorY0R - sumErrorX0Y0 * (sumErrorRR + lambda)) * sumErrorX0 +
+                    ((sumErrorX0X0 + lambda) * (sumErrorRR + lambda) - sumErrorX0R * sumErrorX0R) * sumErrorY0 +
+                    (sumErrorX0R * sumErrorX0Y0 - sumErrorY0R * (sumErrorX0X0 + lambda)) * sumErrorR;
+
+        double dr = (sumErrorX0Y0 * sumErrorY0R - sumErrorX0R * (sumErrorY0Y0 + lambda)) * sumErrorX0 +
+                   (sumErrorX0R * sumErrorX0Y0 - sumErrorY0R * (sumErrorX0X0 + lambda)) * sumErrorY0 +
+                   ((sumErrorX0X0 + lambda) * (sumErrorY0Y0 + lambda) - sumErrorX0Y0 * sumErrorX0Y0) * sumErrorR;
+
+        x0 += dx0 / det;
+        y0 += dy0 / det;
+        r += dr / det;
+    }
+
+    // Create the circle
+    Gui::Command::openCommand(QT_TRANSLATE_NOOP("Command", "Add circle fit"));
+    try {
+        Gui::cmdAppObjectArgs(sketch, "addGeometry(Part.Circle(App.Vector(%f, %f, 0), App.Vector(0, 0, 1), %f))",
+            x0, y0, r);
+        Gui::Command::commitCommand();
+    }
+    catch (const Base::Exception& e) {
+        Gui::Command::abortCommand();
+        QMessageBox::warning(Gui::getMainWindow(),
+            QObject::tr("Circle Fit"),
+            QObject::tr("Failed to create circle: %1").arg(QString::fromUtf8(e.what())));
+    }
+}
+
+bool CmdSketcherCircleFit::isActive()
+{
+    return isCommandActive(getActiveGuiDocument());
+}
+
 void CreateSketcherCommandsCreateGeo()
 {
     Gui::CommandManager& rcCmdMgr = Gui::Application::Instance->commandManager();
@@ -1902,6 +2089,7 @@ void CreateSketcherCommandsCreateGeo()
     rcCmdMgr.addCommand(new CmdSketcherCreateArcSlot());
     rcCmdMgr.addCommand(new CmdSketcherCreateFillet());
     rcCmdMgr.addCommand(new CmdSketcherCreateChamfer());
+    rcCmdMgr.addCommand(new CmdSketcherCircleFit());
     // rcCmdMgr.addCommand(new CmdSketcherCreateText());
     // rcCmdMgr.addCommand(new CmdSketcherCreateDraftLine());
     rcCmdMgr.addCommand(new CmdSketcherTrimming());

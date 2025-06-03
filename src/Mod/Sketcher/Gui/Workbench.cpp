@@ -106,44 +106,98 @@ Gui::ToolBarItem* Workbench::setupToolBars() const
 {
     Gui::ToolBarItem* root = StdWorkbench::setupToolBars();
 
-    Gui::ToolBarItem* sketcher = new Gui::ToolBarItem(root);
-    sketcher->setCommand("Sketcher");
-    addSketcherWorkbenchSketchActions(*sketcher);
+    Gui::ToolBarItem* sketch = new Gui::ToolBarItem(root);
+    sketch->setCommand("Sketcher");
+    *sketch << "Sketcher_NewSketch"
+            << "Sketcher_EditSketch"
+            << "Sketcher_MapSketch"
+            << "Sketcher_ReorientSketch"
+            << "Sketcher_ValidateSketch"
+            << "Sketcher_MergeSketches"
+            << "Sketcher_MirrorSketch"
+            << "Sketcher_StopOperation";
 
-    Gui::ToolBarItem* sketcherEditMode =
-        new Gui::ToolBarItem(root, Gui::ToolBarItem::DefaultVisibility::Unavailable);
-    sketcherEditMode->setCommand("Sketcher edit mode");
-    addSketcherWorkbenchSketchEditModeActions(*sketcherEditMode);
+    Gui::ToolBarItem* geof = new Gui::ToolBarItem(root);
+    geof->setCommand("Sketcher geometries");
+    *geof << "Sketcher_CreatePoint"
+          << "Sketcher_CreateLine"
+          << "Sketcher_CompCreateArc"
+          << "Sketcher_CompCreateCircle"
+          << "Sketcher_CompCreateConic"
+          << "Sketcher_CompCreateBSpline"
+          << "Sketcher_CreatePolyline"
+          << "Sketcher_CreateRectangle"
+          << "Sketcher_CreateRectangleCenter"
+          << "Sketcher_CreateOblong"
+          << "Sketcher_CompCreateRegularPolygon"
+          << "Sketcher_CreateSlot"
+          << "Sketcher_CreateArcSlot"
+          << "Sketcher_CreateFillet"
+          << "Sketcher_CreateChamfer"
+          << "Sketcher_CircleFit";
 
-    Gui::ToolBarItem* geom =
-        new Gui::ToolBarItem(root, Gui::ToolBarItem::DefaultVisibility::Unavailable);
-    geom->setCommand("Sketcher geometries");
-    addSketcherWorkbenchGeometries(*geom);
+    Gui::ToolBarItem* consf = new Gui::ToolBarItem(root);
+    consf->setCommand("Sketcher constraints");
+    *consf << "Sketcher_ConstrainCoincident"
+           << "Sketcher_ConstrainPointOnObject"
+           << "Sketcher_ConstrainVertical"
+           << "Sketcher_ConstrainHorizontal"
+           << "Sketcher_ConstrainParallel"
+           << "Sketcher_ConstrainPerpendicular"
+           << "Sketcher_ConstrainTangent"
+           << "Sketcher_ConstrainEqual"
+           << "Sketcher_ConstrainSymmetric"
+           << "Sketcher_ConstrainBlock"
+           << "Sketcher_ConstrainLock"
+           << "Sketcher_ConstrainDistance"
+           << "Sketcher_ConstrainDistanceX"
+           << "Sketcher_ConstrainDistanceY"
+           << "Sketcher_ConstrainRadius"
+           << "Sketcher_ConstrainDiameter"
+           << "Sketcher_ConstrainRadiam"
+           << "Sketcher_ConstrainAngle"
+           << "Sketcher_ConstrainSnellsLaw"
+           << "Sketcher_ToggleConstraint"
+           << "Sketcher_SelectElementsWithDoFs"
+           << "Sketcher_SelectConflictingConstraints"
+           << "Sketcher_SelectElementsAssociatedWithConstraints"
+           << "Sketcher_SelectRedundantConstraints"
+           << "Sketcher_SelectMalformedConstraints"
+           << "Sketcher_SelectPartiallyRedundantConstraints"
+           << "Sketcher_SelectConstraints"
+           << "Sketcher_SelectOrigin"
+           << "Sketcher_SelectHorizontalAxis"
+           << "Sketcher_SelectVerticalAxis"
+           << "Sketcher_Symmetry"
+           << "Sketcher_CompCopy"
+           << "Sketcher_CompMove"
+           << "Sketcher_CompRectangularArray"
+           << "Sketcher_RemoveAxesAlignment"
+           << "Sketcher_DeleteAllGeometry"
+           << "Sketcher_DeleteAllConstraints";
 
-    Gui::ToolBarItem* cons =
-        new Gui::ToolBarItem(root, Gui::ToolBarItem::DefaultVisibility::Unavailable);
-    cons->setCommand("Sketcher constraints");
-    addSketcherWorkbenchConstraints(*cons);
-
-    Gui::ToolBarItem* consaccel =
-        new Gui::ToolBarItem(root, Gui::ToolBarItem::DefaultVisibility::Unavailable);
-    consaccel->setCommand("Sketcher tools");
-    addSketcherWorkbenchTools(*consaccel);
-
-    Gui::ToolBarItem* bspline =
-        new Gui::ToolBarItem(root, Gui::ToolBarItem::DefaultVisibility::Unavailable);
-    bspline->setCommand("Sketcher B-spline tools");
-    addSketcherWorkbenchBSplines(*bspline);
-
-    Gui::ToolBarItem* visual =
-        new Gui::ToolBarItem(root, Gui::ToolBarItem::DefaultVisibility::Unavailable);
-    visual->setCommand("Sketcher visual");
-    addSketcherWorkbenchVisual(*visual);
-
-    Gui::ToolBarItem* edittools =
-        new Gui::ToolBarItem(root, Gui::ToolBarItem::DefaultVisibility::Unavailable);
-    edittools->setCommand("Sketcher edit tools");
-    addSketcherWorkbenchEditTools(*edittools);
+    Gui::ToolBarItem* toolf = new Gui::ToolBarItem(root);
+    toolf->setCommand("Sketcher tools");
+    *toolf << "Sketcher_Grid"
+           << "Sketcher_Snap"
+           << "Sketcher_RenderingOrder"
+           << "Sketcher_SelectElementsWithDoFs"
+           << "Sketcher_SelectConflictingConstraints"
+           << "Sketcher_SelectElementsAssociatedWithConstraints"
+           << "Sketcher_SelectRedundantConstraints"
+           << "Sketcher_SelectMalformedConstraints"
+           << "Sketcher_SelectPartiallyRedundantConstraints"
+           << "Sketcher_SelectConstraints"
+           << "Sketcher_SelectOrigin"
+           << "Sketcher_SelectHorizontalAxis"
+           << "Sketcher_SelectVerticalAxis"
+           << "Sketcher_Symmetry"
+           << "Sketcher_CompCopy"
+           << "Sketcher_CompMove"
+           << "Sketcher_CompRectangularArray"
+           << "Sketcher_RemoveAxesAlignment"
+           << "Sketcher_DeleteAllGeometry"
+           << "Sketcher_DeleteAllConstraints";
 
     return root;
 }
@@ -663,7 +717,22 @@ void addSketcherWorkbenchSketchEditModeActions(Gui::MenuItem& sketch)
 
 void addSketcherWorkbenchGeometries(Gui::MenuItem& geom)
 {
-    SketcherAddWorkbenchGeometries(geom);
+    geom << "Sketcher_CreatePoint"
+         << "Sketcher_CreateLine"
+         << "Sketcher_CompCreateArc"
+         << "Sketcher_CompCreateCircle"
+         << "Sketcher_CompCreateConic"
+         << "Sketcher_CompCreateBSpline"
+         << "Sketcher_CreatePolyline"
+         << "Sketcher_CreateRectangle"
+         << "Sketcher_CreateRectangleCenter"
+         << "Sketcher_CreateOblong"
+         << "Sketcher_CompCreateRegularPolygon"
+         << "Sketcher_CreateSlot"
+         << "Sketcher_CreateArcSlot"
+         << "Sketcher_CreateFillet"
+         << "Sketcher_CreateChamfer"
+         << "Sketcher_CircleFit";
 }
 
 void addSketcherWorkbenchConstraints(Gui::MenuItem& cons)
