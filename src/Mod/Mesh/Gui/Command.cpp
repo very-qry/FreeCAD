@@ -960,14 +960,14 @@ CmdMeshSectionByPlane2::CmdMeshSectionByPlane2()
 
 void CmdMeshSectionByPlane2::activated(int)
 {
-    Base::Type partType = Base::Type::fromName("Part::Plane");
+    Base::Type partType = Base::Type::fromName("Part::DatumPlane");
     std::vector<App::DocumentObject*> plane = getSelection().getObjectsOfType(partType);
     if (plane.empty()) {
         QMessageBox::warning(
             Gui::getMainWindow(),
             qApp->translate("MeshPart_Section", "Select plane"),
             qApp->translate("MeshPart_Section",
-                            "Please select a plane at which you section the mesh."));
+                            "Please select a datum plane at which you section the mesh."));
         return;
     }
 
@@ -1001,6 +1001,13 @@ void CmdMeshSectionByPlane2::activated(int)
         Gui::Command::doCommand(Gui::Command::Doc, 
             "sketch = App.ActiveDocument.addObject('Sketcher::SketchObject', '%s')", 
             sketchName.c_str());
+
+        // Set up the attachment to the plane
+        Gui::Command::doCommand(Gui::Command::Doc,
+            "sketch.AttachmentSupport = [(App.ActiveDocument.%s, '')]", 
+            plane.front()->getNameInDocument());
+        Gui::Command::doCommand(Gui::Command::Doc,
+            "sketch.MapMode = 'FlatFace'");
 
         // Add points to the sketch
         for (const auto& polyline : polylines) {
