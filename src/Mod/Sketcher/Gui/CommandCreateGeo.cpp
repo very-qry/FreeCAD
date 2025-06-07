@@ -2056,6 +2056,169 @@ bool CmdSketcherCircleFit::isActive()
     return isCommandActive(getActiveGuiDocument());
 }
 
+class CmdSketcherLineFit : public Gui::Command
+{
+public:
+    CmdSketcherLineFit()
+        : Command("Sketcher_LineFit")
+    {
+        sAppModule = "Sketcher";
+        sGroup = "Sketcher";
+        sMenuText = QT_TR_NOOP("Fit line to points");
+        sToolTipText = QT_TR_NOOP("Fit a line to selected points");
+        sWhatsThis = "Sketcher_LineFit";
+        sStatusTip = sToolTipText;
+        sPixmap = "Sketcher_LineFit";
+        sAccel = "G, L";
+        eType = ForEdit;
+    }
+
+    void activated(int iMsg) override;
+    bool isActive() override;
+    const char* className() const override { return "CmdSketcherLineFit"; }
+};
+
+void CmdSketcherLineFit::activated(int iMsg)
+{
+    Q_UNUSED(iMsg);
+
+    // Automatically use the currently edited sketch
+    Gui::Document* editGuiDoc = Gui::Application::Instance->editDocument();
+    if (!editGuiDoc) {
+        QMessageBox::warning(Gui::getMainWindow(),
+            QObject::tr("Line Fit"),
+            QObject::tr("No sketch is currently being edited. Please enter edit mode for a sketch."));
+        return;
+    }
+    Gui::ViewProvider* vp = editGuiDoc->getInEdit();
+    Sketcher::SketchObject* sketch = nullptr;
+    if (vp) {
+        App::DocumentObject* obj = nullptr;
+        if (auto vpd = dynamic_cast<Gui::ViewProviderDocumentObject*>(vp))
+            obj = vpd->getObject();
+        if (obj && obj->getTypeId().isDerivedFrom(Sketcher::SketchObject::getClassTypeId()))
+            sketch = static_cast<Sketcher::SketchObject*>(obj);
+    }
+    if (!sketch) {
+        QMessageBox::warning(Gui::getMainWindow(),
+            QObject::tr("Line Fit"),
+            QObject::tr("No sketch is currently being edited. Please enter edit mode for a sketch."));
+        return;
+    }
+
+    // Use getSelectionEx to get selected vertices in the viewport
+    std::vector<Gui::SelectionObject> selection = Gui::Selection().getSelectionEx();
+    std::vector<Base::Vector2d> points;
+
+    for (const auto& sel : selection) {
+        if (sel.getObject() != sketch)
+            continue;
+        const std::vector<std::string>& subNames = sel.getSubNames();
+        for (const auto& subName : subNames) {
+            // Only process vertices
+            if (subName.size() > 6 && subName.substr(0, 6) == "Vertex") {
+                int VtId = std::atoi(&subName[6]) - 1;
+                int geoId = -1;
+                Sketcher::PointPos posId = Sketcher::PointPos::none;
+                sketch->getGeoVertexIndex(VtId, geoId, posId);
+                if (geoId >= 0) {
+                    try {
+                        Base::Vector3d point3d = sketch->getPoint(geoId, posId);
+                        points.push_back(Base::Vector2d(point3d.x, point3d.y));
+                    } catch (const Base::Exception&) {
+                        continue;
+                    }
+                }
+            }
+        }
+    }
+
+    if (points.size() < 2) {
+        QMessageBox::warning(Gui::getMainWindow(),
+            QObject::tr("Line Fit"),
+            QObject::tr("Please select at least 2 points to fit a line."));
+        return;
+    }
+
+    // Calculate the centroid of the points
+    double sumX = 0, sumY = 0;
+    for (const auto& p : points) {
+        sumX += p.x;
+        sumY += p.y;
+    }
+    double centroidX = sumX / points.size();
+    double centroidY = sumY / points.size();
+
+    // Calculate the covariance matrix
+    double covXX = 0, covXY = 0, covYY = 0;
+    for (const auto& p : points) {
+        double dx = p.x - centroidX;
+        double dy = p.y - centroidY;
+        covXX += dx * dx;
+        covXY += dx * dy;
+        covYY += dy * dy;
+    }
+    covXX /= points.size();
+    covXY /= points.size();
+    covYY /= points.size();
+
+    // Calculate the eigenvalues and eigenvectors
+    double trace = covXX + covYY;
+    double det = covXX * covYY - covXY * covXY;
+    double delta = std::sqrt(trace * trace - 4 * det);
+    double lambda1 = (trace + delta) / 2;
+    double lambda2 = (trace - delta) / 2;
+
+    // The eigenvector corresponding to the larger eigenvalue gives us the line direction
+    double dirX, dirY;
+    if (std::abs(covXY) < 1e-10) {
+        // If covXY is very small, the line is either horizontal or vertical
+        dirX = (covXX > covYY) ? 1 : 0;
+        dirY = (covXX > covYY) ? 0 : 1;
+    } else {
+        dirX = covXY;
+        dirY = lambda1 - covXX;
+        double length = std::sqrt(dirX * dirX + dirY * dirY);
+        dirX /= length;
+        dirY /= length;
+    }
+
+    // Project points onto the line to find the extent
+    double minProj = std::numeric_limits<double>::max();
+    double maxProj = -std::numeric_limits<double>::max();
+    for (const auto& p : points) {
+        double proj = dirX * (p.x - centroidX) + dirY * (p.y - centroidY);
+        minProj = std::min(minProj, proj);
+        maxProj = std::max(maxProj, proj);
+    }
+
+    // Calculate the endpoints of the line
+    double x1 = centroidX + dirX * minProj;
+    double y1 = centroidY + dirY * minProj;
+    double x2 = centroidX + dirX * maxProj;
+    double y2 = centroidY + dirY * maxProj;
+
+    // Create the line
+    Gui::Command::openCommand(QT_TRANSLATE_NOOP("Command", "Add line fit"));
+    try {
+        // Add the line geometry in construction mode
+        Gui::cmdAppObjectArgs(sketch, "addGeometry(Part.LineSegment(App.Vector(%f, %f, 0), App.Vector(%f, %f, 0)), True)",
+            x1, y1, x2, y2);
+        Gui::Command::commitCommand();
+    }
+    catch (const Base::Exception& e) {
+        Gui::Command::abortCommand();
+        QMessageBox::warning(Gui::getMainWindow(),
+            QObject::tr("Line Fit"),
+            QObject::tr("Failed to create line: %1").arg(QString::fromUtf8(e.what())));
+    }
+}
+
+bool CmdSketcherLineFit::isActive()
+{
+    return isCommandActive(getActiveGuiDocument());
+}
+
 void CreateSketcherCommandsCreateGeo()
 {
     Gui::CommandManager& rcCmdMgr = Gui::Application::Instance->commandManager();
@@ -2091,6 +2254,7 @@ void CreateSketcherCommandsCreateGeo()
     rcCmdMgr.addCommand(new CmdSketcherCreateFillet());
     rcCmdMgr.addCommand(new CmdSketcherCreateChamfer());
     rcCmdMgr.addCommand(new CmdSketcherCircleFit());
+    rcCmdMgr.addCommand(new CmdSketcherLineFit());
     // rcCmdMgr.addCommand(new CmdSketcherCreateText());
     // rcCmdMgr.addCommand(new CmdSketcherCreateDraftLine());
     rcCmdMgr.addCommand(new CmdSketcherTrimming());
