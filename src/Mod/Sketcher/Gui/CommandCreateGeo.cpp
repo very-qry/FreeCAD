@@ -2038,7 +2038,8 @@ void CmdSketcherCircleFit::activated(int iMsg)
     // Create the circle
     Gui::Command::openCommand(QT_TRANSLATE_NOOP("Command", "Add circle fit"));
     try {
-        Gui::cmdAppObjectArgs(sketch, "addGeometry(Part.Circle(App.Vector(%f, %f, 0), App.Vector(0, 0, 1), %f))",
+        // Add the circle geometry in construction mode
+        Gui::cmdAppObjectArgs(sketch, "addGeometry(Part.Circle(App.Vector(%f, %f, 0), App.Vector(0, 0, 1), %f), True)",
             x0, y0, r);
         Gui::Command::commitCommand();
     }
