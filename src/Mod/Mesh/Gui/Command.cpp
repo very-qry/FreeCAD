@@ -1013,9 +1013,14 @@ void CmdMeshSectionByPlane2::activated(int)
         for (const auto& polyline : polylines) {
             for (const auto& points : polyline) {
                 for (const auto& point : points) {
+                    // Transform the point to the plane's coordinate system
+                    Base::Vector3d transformedPoint(point.x, point.y, point.z);
+                    Base::Placement invPlm = plm.inverse();
+                    invPlm.multVec(transformedPoint, transformedPoint);
+                    
                     Gui::Command::doCommand(Gui::Command::Doc,
                         "sketch.addGeometry(Part.Point(App.Vector(%f, %f, %f)))",
-                        point.x, point.y, point.z);
+                        transformedPoint.x, transformedPoint.y, transformedPoint.z);
                 }
             }
         }
